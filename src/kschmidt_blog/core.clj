@@ -111,11 +111,39 @@
   (zipmap (keys pages)
           (map #(fn [req] (highlight-code-blocks %)) (vals pages))))
 
-(defn get-pages []
-  (prepare-pages (get-raw-pages)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; ACTUAL
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;(defn get-pages []
+;;  (prepare-pages (get-raw-pages)))
+
+(def posts2 (array-map "Star Wars" "2016-01-11" "Star Trek" "2016-01-18"))
+(def posts3 (array-map "Star Wars" "2016-01-11"))
+
+(defn post-relative-url [post]
+  (str (tf/unparse (tf/formatter "/yyyy/MM/dd/") (get-in post [:header :date]))
+       (get-in post [:header :slug])
+       "/"))
+
+(defn post-absolute-url [uri post]
+  (str uri (post-relative-url post)))
+
+(enlive/deftemplate index-post-template "partials/index_posts.html"
+  [post]
+  [:span] (enlive/content (first (keys post)))
+  [:p] (enlive/content (first (vals post)))
+;;  [:a#link] (enlive/set-attr :href (p/post-relative-url post))
+  [:a#link] (enlive/set-attr :title (first (keys post))))
 
 (enlive/deftemplate index-template "layouts/index.html" []
-  [:aside#author-bio] (enlive/html-content (slurp "resources/partials/author_bio.html")))
+  [:aside#author-bio] (enlive/html-content (slurp "resources/partials/author_bio.html"))
+  [:footer#footer-content] (enlive/html-content (slurp "resources/partials/footer.html"))
+  [:div.navigation] (enlive/html-content (slurp "resources/partials/navigation.html"))
+  [:header] (enlive/html-content (slurp "resources/partials/header.html")))
+;;  [:div#articles] (enlive/html-content (apply str (index-post-template))))
 
 (defn get-index []
   (into {} [["/index.html" (apply str (index-template))]]))

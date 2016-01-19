@@ -12,5 +12,7 @@
                  [me.raynes/cegdown "0.1.1"]
                  [clygments "0.1.1"]
                  [enlive "1.1.6"]]
-  :plugins [[lein-ring "0.9.7"]]
-  :ring {:handler kschmidt_blog.core/app})
+  :plugins [[lein-ring "0.9.7"]
+            [cider/cider-nrepl "0.10.1"]]
+  :ring {:handler kschmidt_blog.core/app}
+  :repl {:dependencies [[org.clojure/tools.nrepl "0.2.12"]]})
