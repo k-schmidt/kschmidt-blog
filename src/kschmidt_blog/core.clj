@@ -2,6 +2,7 @@
   (:require [stasis.core :as stasis]
             [markdown.core :as md]
             [clojure.string :as str]
+            [clj-time.format :as tf]
             [hiccup.page :refer [html5]]
             [clojure.java.io :as io]
             [me.raynes.cegdown :as md2]
@@ -123,30 +124,72 @@
 (def posts2 (array-map "Star Wars" "2016-01-11" "Star Trek" "2016-01-18"))
 (def posts3 (array-map "Star Wars" "2016-01-11"))
 
+(defn parse-datestring [date-str]
+  (tf/parse (tf/formatter "yyyy-MM-dd") date-str))
+
 (defn post-relative-url [post]
   (str (tf/unparse (tf/formatter "/yyyy/MM/dd/") (get-in post [:header :date]))
-       (get-in post [:header :slug])
-       "/"))
+       (get-in post [:header :slug])))
+
+(defn parse-post [post]
+  (let [x (str/split post #"\n------\n")]
+    {:body (second x)
+     :header (let [header (read-string (first x))]
+               (assoc header :date (parse-datestring (header :date))))}))
 
 (defn post-absolute-url [uri post]
   (str uri (post-relative-url post)))
+;; (map (partial post-absolute-url "www.kschmidt.com") (get-posts))
+
+(defn filename [title date]
+  (str (tf/unparse (tf/formatter "/yyyy/MM/dd/") date)
+       title "/index.html"))
+
+(defn post-filename [post]
+  (filename (get-in post [:header :slug])
+            (get-in post [:header :date])))
+
+(def cegdown-ext [:fenced-code-blocks :autolinks])
+
+(defn update-body [f post]
+  (assoc post :body (f (post :body))))
+
+(defn markdown [post]
+  (update-body #(md2/to-html % cegdown-ext) post))
+
+(def enliveify (partial update-body enlive/html-snippet))
+
+(defn render [post]
+  (update-body #(apply str (enlive/emit* %)) post))
 
 (enlive/deftemplate index-post-template "partials/index_posts.html"
-  [post]
-  [:span] (enlive/content (first (keys post)))
-  [:p] (enlive/content (first (vals post)))
-;;  [:a#link] (enlive/set-attr :href (p/post-relative-url post))
-  [:a#link] (enlive/set-attr :title (first (keys post))))
+  [{:keys [header body] :as post}]
+  [:span] (enlive/content (:title header))
+  [:p] (enlive/content body)
+  [:a#link] (enlive/set-attr :href (post-relative-url post))
+  [:a#link] (enlive/set-attr :title (:title header)))
 
-(enlive/deftemplate index-template "layouts/index.html" []
+(enlive/deftemplate index-template "layouts/index.html" [posts]
   [:aside#author-bio] (enlive/html-content (slurp "resources/partials/author_bio.html"))
   [:footer#footer-content] (enlive/html-content (slurp "resources/partials/footer.html"))
   [:div.navigation] (enlive/html-content (slurp "resources/partials/navigation.html"))
-  [:header] (enlive/html-content (slurp "resources/partials/header.html")))
-;;  [:div#articles] (enlive/html-content (apply str (index-post-template))))
+  [:header] (enlive/html-content (slurp "resources/partials/header.html"))
+  [:div#articles] (enlive/html-content (apply str (map #(apply str (index-post-template %)) posts))))
 
-(defn get-index []
-  (into {} [["/index.html" (apply str (index-template))]]))
+(defn apply-post-layout [post]
+  (assoc post :body (apply str (index-post-template post))))
+
+(defn get-posts []
+  (->> (stasis/slurp-directory "resources/articles/" #".*\.(md|markdown)$")
+       (vals)
+       (map (comp apply-post-layout
+                  render
+                  enliveify
+                  markdown
+                  parse-post))))
+
+(defn get-index [posts]
+  (into {} [["/index.html" (apply str (index-template posts))]]))
 
 ;;(defn handler [request]
 ;;  {:status 200
@@ -158,4 +201,4 @@
 
 
 (def app
-  (stasis/serve-pages (get-index)))
+  (stasis/serve-pages (get-index (get-posts))))
